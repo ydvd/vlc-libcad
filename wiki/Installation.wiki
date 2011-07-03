@@ -1,0 +1,13 @@
+#summary Installation instructions.
+== Installation ==
+
+- First, close VLC media player. Then, download the latest version of the libcad plugin for VLC from [http://code.google.com/p/vlc-libcad/downloads/list here]
+
+- Extract the downloaded archive and copy the *libcad_plugin.dll* file into your VLC plugins folder (usually located in *C:\Program Files\VideoLAN\VLC\plugins*)
+
+- Open VLC and select *Tools -> Preferences*. First, click on *All* under "Show settings" (*<font color="red">1.</font>*). Then, expand *Interface -> Control interfaces* (*<font color="red">2.</font>*). Check *CAD Now-Playing* (*<font color="red">3.</font>*) and then Save (*<font color="red">4.</font>*).
+
+- For the changes to take effect you must restart VLC. Enjoy!
+
+<br/>
+http://vlc-libcad.googlecode.com/svn/trunk/img/pref.jpg
