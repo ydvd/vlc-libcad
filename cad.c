@@ -98,6 +98,7 @@ enum IPCMESSAGE
 };
 
 #define DATA_MAX_LENGTH 1024
+#define NOWPLAYING_TIMER 1
 
 static HWND g_CAD = NULL;
 static HWND g_Window = NULL;
@@ -461,6 +462,50 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 				return 0;
 			}
 
+		case IPC_GET_SHUFFLE:
+			{
+				playlist_t* p_playlist = pl_Get(g_VLC);
+				if (p_playlist)
+				{
+					return (int)var_GetBool(p_playlist, "random");
+				}
+
+				return 0;
+			}
+
+		case IPC_SET_SHUFFLE:
+			{
+				playlist_t* p_playlist = pl_Get(g_VLC);
+				if (p_playlist)
+				{
+					return (int)var_SetBool(p_playlist, "random", (bool)wParam);
+				}
+
+				return 1;
+			}
+
+		case IPC_GET_REPEAT:
+			{
+				playlist_t* p_playlist = pl_Get(g_VLC);
+				if (p_playlist)
+				{
+					return (int)var_GetBool(p_playlist, "repeat");
+				}
+
+				return 0;
+			}
+
+		case IPC_SET_REPEAT:
+			{
+				playlist_t* p_playlist = pl_Get(g_VLC);
+				if (p_playlist)
+				{
+					return (int)var_SetBool(p_playlist, "repeat", (bool)wParam);
+				}
+
+				return 1;
+			}
+
 		case IPC_SET_RATING:
 			{
 				// Send back 0
@@ -483,20 +528,19 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 		case IPC_GET_STATE:
 			{
 				playlist_t* p_playlist = pl_Get(g_VLC);
-				switch (playlist_Status(p_playlist))
+				if (p_playlist)
 				{
-				case PLAYLIST_STOPPED:
-					return 0;
+					switch (playlist_Status(p_playlist))
+					{
+					case PLAYLIST_RUNNING:
+						return 1;
 
-				case PLAYLIST_RUNNING:
-					return 1;
-
-				case PLAYLIST_PAUSED:
-					return 2;
-
-				default:
-					return 0;
+					case PLAYLIST_PAUSED:
+						return 2;
+					}
 				}
+
+				return 0;
 			}
 
 		case IPC_SHUTDOWN_NOTIFICATION:
@@ -513,49 +557,99 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 
 		case IPC_GET_CURRENT_TRACK:
 			{
+				KillTimer(hwnd, NOWPLAYING_TIMER);
+
 				input_thread_t* p_input = __pl_CurrentInput(g_VLC);
 				if (!p_input) return 0;
 
 				input_item_t* p_item = input_GetItem(p_input);
-				char* artist = input_item_GetArtist(p_item);
-				char* album = input_item_GetAlbum(p_item);
 				char* file = input_item_GetURI(p_item);
-				char* cover = input_item_GetArtworkURL(p_item);
-				unsigned int duration = (unsigned int)(input_item_GetDuration(p_item) / 1000000);
-
 				decode_URI(file);
-				decode_URI(cover);
 
-				char* title = (strncmp(file, "file://", 7) == 0) ? input_item_GetTitleFbName(p_item) : input_item_GetNowPlaying(p_item);
+				if (strncmp(file, "file://", 7) == 0)
+				{
+					char* artist = input_item_GetArtist(p_item);
+					char* album = input_item_GetAlbum(p_item);
+					char* cover = input_item_GetArtworkURL(p_item);
+					decode_URI(cover);
+					unsigned int duration = (unsigned int)(input_item_GetDuration(p_item) / 1000000);
+					
+					char* title = input_item_GetTitleFbName(p_item);
 
-				char cBuffer[DATA_MAX_LENGTH];
-				_snprintf(cBuffer, DATA_MAX_LENGTH, "%s\t%s\t%s\t\t\t\t\t%u\t%s\t\t%s\t\t\t\t\t\t\t",
-													title ? title : "",
-													artist ? artist : "",
-													album ? album : "",
-													duration,
-													file ? &file[8] : "",
-													cover ? &cover[8] : "");  // skip the file://
+					char cBuffer[DATA_MAX_LENGTH];
+					_snprintf(cBuffer, DATA_MAX_LENGTH, "%s\t%s\t%s\t\t\t\t\t%u\t%s\t\t%s\t\t\t\t\t\t\t",
+														title ? title : "",
+														artist ? artist : "",
+														album ? album : "",
+														duration,
+														file ? &file[8] : "",
+														cover ? &cover[8] : "");  // skip the file://
 
-				wchar_t wBuffer[DATA_MAX_LENGTH];
-				MultiByteToWideChar(CP_UTF8, 0, cBuffer, -1, &wBuffer, DATA_MAX_LENGTH);
+					wchar_t wBuffer[DATA_MAX_LENGTH];
+					MultiByteToWideChar(CP_UTF8, 0, cBuffer, -1, &wBuffer, DATA_MAX_LENGTH);
 
-				COPYDATASTRUCT cds;
-				cds.dwData = IPC_CURRENT_TRACK_NOTIFICATION;
-				cds.lpData = (PVOID)&wBuffer;
-				cds.cbData = (wcslen(wBuffer) + 1) * 2;
-				SendMessage(g_CAD, WM_COPYDATA, (WPARAM)IPC_CURRENT_TRACK_NOTIFICATION, (LPARAM)&cds);
+					COPYDATASTRUCT cds;
+					cds.dwData = IPC_CURRENT_TRACK_NOTIFICATION;
+					cds.lpData = (PVOID)&wBuffer;
+					cds.cbData = (wcslen(wBuffer) + 1) * 2;
+					SendMessage(g_CAD, WM_COPYDATA, (WPARAM)IPC_CURRENT_TRACK_NOTIFICATION, (LPARAM)&cds);
 
-				free(title);
-				free(artist);
-				free(album);
-				free(file);
-				free(cover);
+					free(title);
+					free(artist);
+					free(album);
+					free(file);
+					free(cover);
+				}
+				else
+				{
+					SetTimer(hwnd, NOWPLAYING_TIMER, 2500, NULL);
+				}
+
 				vlc_object_release(p_input);
 				return 1;
 			}
 		}
 
+		return 0;
+	}
+	else if (msg == WM_TIMER && wParam == NOWPLAYING_TIMER)
+	{
+		input_thread_t* p_input = __pl_CurrentInput(g_VLC);
+		if (!p_input) return 0;
+
+		input_item_t* p_item = input_GetItem(p_input);
+		char* nowplaying = input_item_GetNowPlaying(p_item);
+
+		if (nowplaying)
+		{
+			char* artist = NULL;
+			char* title = nowplaying;
+			char* pos = strstr(nowplaying, " - ");
+			if (pos)
+			{
+				pos[0] = '\0';
+				artist = title;
+				title = pos + 3;	// Skip the " - "
+			}
+
+			char cBuffer[DATA_MAX_LENGTH];
+			_snprintf(cBuffer, DATA_MAX_LENGTH, "%s\t%s\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
+												title ? title : "",
+												artist ? artist : "");  // skip the file://
+
+			wchar_t wBuffer[DATA_MAX_LENGTH];
+			MultiByteToWideChar(CP_UTF8, 0, cBuffer, -1, &wBuffer, DATA_MAX_LENGTH);
+
+			COPYDATASTRUCT cds;
+			cds.dwData = IPC_CURRENT_TRACK_NOTIFICATION;
+			cds.lpData = (PVOID)&wBuffer;
+			cds.cbData = (wcslen(wBuffer) + 1) * 2;
+			SendMessage(g_CAD, WM_COPYDATA, (WPARAM)IPC_CURRENT_TRACK_NOTIFICATION, (LPARAM)&cds);
+
+			free(nowplaying);
+		}
+
+		vlc_object_release(p_input);
 		return 0;
 	}
 
