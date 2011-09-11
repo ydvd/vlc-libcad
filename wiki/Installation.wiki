@@ -1,6 +1,8 @@
 #summary Installation instructions.
 == Installation ==
 
+- Note that VLC 1.1.x is required. The plugin will not work on VLC 1.2.0 beta versions (VLC 1.2.0 will be supported when it's officially released).
+
 - First, close VLC media player. Then, download the latest version of the libcad plugin for VLC from [http://code.google.com/p/vlc-libcad/downloads/list here]
 
 - Extract the downloaded archive and copy the *libcad_plugin.dll* file into your VLC plugins folder (usually located in *C:\Program Files\VideoLAN\VLC\plugins*)
